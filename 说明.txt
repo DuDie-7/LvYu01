@@ -1,0 +1,20 @@
+"""
+文件清单
+文件路径	说明
+app.py	应用入口
+config.py	配置文件
+requirements.txt	依赖包列表
+api/__init__.py	应用工厂，注册蓝图，导入模型
+api/exts.py	SQLAlchemy 和 Migrate 实例
+api/models.py	用户和留言模型
+api/auth.py	登录、登出路由
+api/message.py	留言增删改查、分页路由
+templates/base.html	基础模板
+templates/login.html	登录页面
+templates/index.html	留言列表（分页）
+templates/add.html	新增留言
+templates/edit.html	编辑留言
+templates/detail.html	留言详情
+
+后续可能有删改，本文件内容可能未同步更新
+"""

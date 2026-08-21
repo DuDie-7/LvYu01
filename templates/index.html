@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}留言列表{% endblock %}
+{% block content %}
+<h2>留言列表</h2>
+{% if messages %}
+    {% for msg in messages %}
+        <div style="border:1px solid #ddd; margin:15px 0; padding:10px;">
+            <h3><a href="{{ url_for('message.detail', msg_id=msg.id) }}">{{ msg.title }}</a></h3>
+            <p>作者：{{ msg.author.username }} | 发表于：{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+            <p>{{ msg.content[:100] }}{% if msg.content|length > 100 %}...{% endif %}</p>
+            <p>
+                <a href="{{ url_for('message.edit', msg_id=msg.id) }}">编辑</a>
+                <a href="{{ url_for('message.delete', msg_id=msg.id) }}" onclick="return confirm('确定删除？')">删除</a>
+            </p>
+        </div>
+    {% endfor %}
+    <div class="pagination">
+        {% if pagination.has_prev %}
+            <a href="{{ url_for('message.index', page=pagination.prev_num) }}">上一页</a>
+        {% endif %}
+        <span>第 {{ pagination.page }} 页 / 共 {{ pagination.pages }} 页</span>
+        {% if pagination.has_next %}
+            <a href="{{ url_for('message.index', page=pagination.next_num) }}">下一页</a>
+        {% endif %}
+    </div>
+{% else %}
+    <p>暂无留言，<a href="{{ url_for('message.add') }}">发表第一条</a></p>
+{% endif %}
+{% endblock %}
