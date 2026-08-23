@@ -7,6 +7,7 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)   # 明文存储（仅实验用）
+    is_admin = db.Column(db.Boolean, default=False)
 # 留言模型
 class Message(db.Model):
     __tablename__ = 'message'
