@@ -1,34 +1,35 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
 from .models import Message
 from .exts import db
 
 message_bp = Blueprint('message', __name__)
 
 
-# 首页：留言列表
 @message_bp.route('/')
 @login_required
 def index():
     page = request.args.get('page', 1, type=int)
     per_page = 5
-    pagination = Message.query.order_by(Message.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
+    
+    # 使用 joinedload 预加载 author，避免 N+1 查询
+    pagination = Message.query.options(joinedload(Message.author)).order_by(
+        Message.created_at.desc()
+    ).paginate(page=page, per_page=per_page, error_out=False)
+    
     messages = pagination.items
     
-    # 如果请求头包含 Accept: application/json，说明是 Vue 前端在请求，返回 JSON
     if request.headers.get('Accept') == 'application/json':
         messages_data = []
         for m in messages:
-            # 获取作者用户名
             author_name = m.author.username if m.author else '匿名'
             messages_data.append({
                 'id': m.id,
                 'title': m.title,
                 'content': m.content,
                 'author_id': m.author_id,
-                'author_username': author_name,  # 新增：返回用户名
+                'author_username': author_name,
                 'created_at': m.created_at.strftime('%Y-%m-%d %H:%M')
             })
         return jsonify({
@@ -38,22 +39,18 @@ def index():
             'pages': pagination.pages
         }), 200
     
-    # 否则返回原来的网页（兼容旧版）
     return render_template('index.html', messages=messages, pagination=pagination)
 
 
-# 新增留言
 @message_bp.route('/add', methods=['GET', 'POST'])
 @login_required
 def add():
     if request.method == 'POST':
-        # 判断是不是 JSON 请求（Vue 前端）
         data = request.get_json()
         if data:
             title = data.get('title')
             content = data.get('content')
         else:
-            # 兼容旧的网页表单
             title = request.form.get('title')
             content = request.form.get('content')
 
@@ -77,12 +74,10 @@ def add():
     return render_template('add.html')
 
 
-# 编辑留言
 @message_bp.route('/edit/<int:msg_id>', methods=['GET', 'POST'])
 @login_required
 def edit(msg_id):
     msg = Message.query.get_or_404(msg_id)
-    # 只有作者本人可以编辑（admin 也不能编辑别人的留言）
     if msg.author_id != current_user.id:
         data = request.get_json()
         if data:
@@ -110,12 +105,10 @@ def edit(msg_id):
     return render_template('edit.html', msg=msg)
 
 
-# 删除留言（admin 或作者本人可以删除）
 @message_bp.route('/delete/<int:msg_id>')
 @login_required
 def delete(msg_id):
     msg = Message.query.get_or_404(msg_id)
-    # 如果是 admin 或者是留言作者本人，可以删除
     if not (current_user.is_admin or msg.author_id == current_user.id):
         if request.headers.get('Accept') == 'application/json':
             return jsonify({'error': '无权删除此留言'}), 403
@@ -133,12 +126,10 @@ def delete(msg_id):
         return redirect(url_for('message.index'))
 
 
-# 查看留言详情
 @message_bp.route('/detail/<int:msg_id>')
 @login_required
 def detail(msg_id):
     msg = Message.query.get_or_404(msg_id)
-    # 支持 JSON 请求返回 JSON 数据
     if request.headers.get('Accept') == 'application/json':
         return jsonify({
             'id': msg.id,
