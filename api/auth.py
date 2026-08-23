@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from werkzeug.security import generate_password_hash, check_password_hash
 from .models import User
 from .exts import db
 
@@ -16,10 +15,11 @@ def login():
             username = data.get('username')
             password = data.get('password')
         else:
-            # 兼容旧的网页表单
+            # 如果没有 JSON，回退到表单数据（兼容原网页版）
             username = request.form.get('username')
             password = request.form.get('password')
 
+        # 检查用户名和密码是否为空
         if not username or not password:
             if data:
                 return jsonify({'error': '用户名和密码不能为空'}), 400
@@ -27,40 +27,26 @@ def login():
                 flash('用户名和密码不能为空', 'danger')
                 return render_template('login.html')
 
-        # 查询用户
+        # 查询用户是否存在
         user = User.query.filter_by(username=username).first()
-
         if user:
-            # 用户存在，验证密码（兼容旧明文密码，自动迁移）
-            # 先尝试哈希验证
-            if check_password_hash(user.password, password):
+            # 用户存在，验证密码
+            if user.password == password:
                 login_user(user)
                 if data:
+                    # JSON 请求返回成功信息（前端通过路由跳转，但这里返回状态码让前端处理）
                     return jsonify({'message': '登录成功', 'username': username}), 200
                 else:
                     return redirect(url_for('message.index'))
             else:
-                # 如果哈希验证失败，尝试明文匹配（兼容旧数据）
-                if user.password == password:
-                    # 明文匹配成功，更新为哈希
-                    user.password = generate_password_hash(password)
-                    db.session.commit()
-                    login_user(user)
-                    if data:
-                        return jsonify({'message': '登录成功（密码已升级）', 'username': username}), 200
-                    else:
-                        flash('密码已升级，请重新登录', 'success')
-                        return redirect(url_for('auth.login'))
+                if data:
+                    return jsonify({'error': '密码错误'}), 401
                 else:
-                    if data:
-                        return jsonify({'error': '密码错误'}), 401
-                    else:
-                        flash('密码错误', 'danger')
-                        return render_template('login.html')
+                    flash('密码错误', 'danger')
+                    return render_template('login.html')
         else:
-            # 用户不存在，自动创建新用户（密码加密存储）
-            hashed_pw = generate_password_hash(password)
-            new_user = User(username=username, password=hashed_pw)
+            # 用户不存在，自动创建新用户并登录
+            new_user = User(username=username, password=password)
             db.session.add(new_user)
             db.session.commit()
             login_user(new_user)
@@ -69,7 +55,6 @@ def login():
             else:
                 flash(f'欢迎 {username}，账号已自动创建并登录', 'success')
                 return redirect(url_for('message.index'))
-
     return render_template('login.html')
 
 
@@ -84,6 +69,7 @@ def logout():
 @login_required
 def change_password():
     if request.method == 'POST':
+        # 优先从 JSON 获取数据
         data = request.get_json()
         if data:
             old_password = data.get('old_password')
@@ -94,8 +80,7 @@ def change_password():
             new_password = request.form.get('new_password')
             confirm_password = request.form.get('confirm_password')
 
-        # 验证旧密码（兼容明文/哈希）
-        if not (check_password_hash(current_user.password, old_password) or current_user.password == old_password):
+        if not current_user.password == old_password:
             if data:
                 return jsonify({'error': '原密码错误'}), 401
             else:
@@ -111,8 +96,7 @@ def change_password():
             else:
                 flash('密码长度至少4位', 'danger')
         else:
-            # 更新为哈希密码
-            current_user.password = generate_password_hash(new_password)
+            current_user.password = new_password
             db.session.commit()
             if data:
                 return jsonify({'message': '密码修改成功，请重新登录'}), 200
@@ -120,5 +104,4 @@ def change_password():
                 flash('密码修改成功，请重新登录', 'success')
                 logout_user()
                 return redirect(url_for('auth.login'))
-
     return render_template('change_password.html')
