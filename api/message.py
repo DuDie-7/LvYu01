@@ -19,14 +19,20 @@ def index():
     
     # 如果请求头包含 Accept: application/json，说明是 Vue 前端在请求，返回 JSON
     if request.headers.get('Accept') == 'application/json':
-        return jsonify({
-            'messages': [{
+        messages_data = []
+        for m in messages:
+            # 获取作者用户名
+            author_name = m.author.username if m.author else '匿名'
+            messages_data.append({
                 'id': m.id,
                 'title': m.title,
                 'content': m.content,
                 'author_id': m.author_id,
+                'author_username': author_name,  # 新增：返回用户名
                 'created_at': m.created_at.strftime('%Y-%m-%d %H:%M')
-            } for m in messages],
+            })
+        return jsonify({
+            'messages': messages_data,
             'total': pagination.total,
             'page': pagination.page,
             'pages': pagination.pages
@@ -76,6 +82,7 @@ def add():
 @login_required
 def edit(msg_id):
     msg = Message.query.get_or_404(msg_id)
+    # 只有作者本人可以编辑（admin 也不能编辑别人的留言）
     if msg.author_id != current_user.id:
         data = request.get_json()
         if data:
@@ -103,12 +110,13 @@ def edit(msg_id):
     return render_template('edit.html', msg=msg)
 
 
-# 删除留言
+# 删除留言（admin 或作者本人可以删除）
 @message_bp.route('/delete/<int:msg_id>')
 @login_required
 def delete(msg_id):
     msg = Message.query.get_or_404(msg_id)
-    if msg.author_id != current_user.id:
+    # 如果是 admin 或者是留言作者本人，可以删除
+    if not (current_user.is_admin or msg.author_id == current_user.id):
         if request.headers.get('Accept') == 'application/json':
             return jsonify({'error': '无权删除此留言'}), 403
         else:
@@ -130,4 +138,15 @@ def delete(msg_id):
 @login_required
 def detail(msg_id):
     msg = Message.query.get_or_404(msg_id)
+    # 支持 JSON 请求返回 JSON 数据
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({
+            'id': msg.id,
+            'title': msg.title,
+            'content': msg.content,
+            'author_id': msg.author_id,
+            'author_username': msg.author.username if msg.author else '匿名',
+            'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M'),
+            'updated_at': msg.updated_at.strftime('%Y-%m-%d %H:%M')
+        }), 200
     return render_template('detail.html', msg=msg)
