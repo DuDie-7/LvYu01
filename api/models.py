@@ -1,6 +1,7 @@
 from .exts import db
 from flask_login import UserMixin
 from datetime import datetime
+
 # 用户模型
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
@@ -10,6 +11,7 @@ class User(db.Model, UserMixin):
     is_admin = db.Column(db.Boolean, default=False)
     login_fail_count = db.Column(db.Integer, default=0)
     locked_until = db.Column(db.DateTime, nullable=True)
+
 # 留言模型
 class Message(db.Model):
     __tablename__ = 'message'
@@ -19,5 +21,6 @@ class Message(db.Model):
     author_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
-# 关联用户对象
+    is_pinned = db.Column(db.Boolean, default=False)      # 新增：是否置顶
+    # 关联用户对象
     author = db.relationship('User', backref='messages')
