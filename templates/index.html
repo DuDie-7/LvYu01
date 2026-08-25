@@ -5,12 +5,29 @@
 {% if messages %}
     {% for msg in messages %}
         <div style="border:1px solid #ddd; margin:15px 0; padding:10px;">
-            <h3><a href="{{ url_for('message.detail', msg_id=msg.id) }}">{{ msg.title }}</a></h3>
-            <p>作者：{{ msg.author.username }} | 发表于：{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}</p>
+            <h3>
+                {% if msg.is_pinned %}
+                    <span style="color: #e6a23c;">📌</span>
+                {% endif %}
+                <a href="{{ url_for('message.detail', msg_id=msg.id) }}">{{ msg.title }}</a>
+            </h3>
+            <p>
+                作者：{{ msg.author.username }} | 发表于：{{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% if msg.is_pinned %}
+                    <span style="color: #e6a23c; margin-left: 12px;">📌 置顶</span>
+                {% endif %}
+            </p>
             <p>{{ msg.content[:100] }}{% if msg.content|length > 100 %}...{% endif %}</p>
             <p>
                 <a href="{{ url_for('message.edit', msg_id=msg.id) }}">编辑</a>
                 <a href="{{ url_for('message.delete', msg_id=msg.id) }}" onclick="return confirm('确定删除？')">删除</a>
+                {% if current_user.is_admin %}
+                    <form method="POST" action="{{ url_for('message.pin', msg_id=msg.id) }}" style="display:inline;margin-left:10px;">
+                        <button type="submit" style="border:none;background:none;color:{% if msg.is_pinned %}#67c23a{% else %}#409eff{% endif %};cursor:pointer;text-decoration:underline;font-size:14px;">
+                            {% if msg.is_pinned %}取消置顶{% else %}置顶{% endif %}
+                        </button>
+                    </form>
+                {% endif %}
             </p>
         </div>
     {% endfor %}
