@@ -12,7 +12,9 @@ message_bp = Blueprint('message', __name__)
 def index():
     page = request.args.get('page', 1, type=int)
     per_page = 5
+    # 置顶留言排在最前，然后按创建时间倒序
     pagination = Message.query.options(joinedload(Message.author)).order_by(
+        Message.is_pinned.desc(),
         Message.created_at.desc()
     ).paginate(page=page, per_page=per_page, error_out=False)
     messages = pagination.items
@@ -27,7 +29,8 @@ def index():
                 'content': m.content,
                 'author_id': m.author_id,
                 'author_username': author_name,
-                'created_at': m.created_at.strftime('%Y-%m-%d %H:%M')
+                'created_at': m.created_at.strftime('%Y-%m-%d %H:%M'),
+                'is_pinned': m.is_pinned
             })
         return jsonify({
             'messages': messages_data,
@@ -114,7 +117,8 @@ def edit(msg_id):
             'author_id': msg.author_id,
             'author_username': msg.author.username if msg.author else '匿名',
             'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M'),
-            'updated_at': msg.updated_at.strftime('%Y-%m-%d %H:%M')
+            'updated_at': msg.updated_at.strftime('%Y-%m-%d %H:%M'),
+            'is_pinned': msg.is_pinned
         }), 200
     return render_template('edit.html', msg=msg)
 
@@ -151,6 +155,31 @@ def detail(msg_id):
             'author_id': msg.author_id,
             'author_username': msg.author.username if msg.author else '匿名',
             'created_at': msg.created_at.strftime('%Y-%m-%d %H:%M'),
-            'updated_at': msg.updated_at.strftime('%Y-%m-%d %H:%M')
+            'updated_at': msg.updated_at.strftime('%Y-%m-%d %H:%M'),
+            'is_pinned': msg.is_pinned
         }), 200
     return render_template('detail.html', msg=msg)
+
+
+# ===== 新增：置顶/取消置顶路由 =====
+@message_bp.route('/pin/<int:msg_id>', methods=['POST'])
+@login_required
+def pin(msg_id):
+    """切换留言置顶状态，仅管理员可操作"""
+    if not current_user.is_admin:
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({'error': '只有管理员可以操作置顶'}), 403
+        else:
+            flash('只有管理员可以操作置顶', 'danger')
+            return redirect(url_for('message.index'))
+
+    msg = Message.query.get_or_404(msg_id)
+    msg.is_pinned = not msg.is_pinned
+    db.session.commit()
+
+    status = '已置顶' if msg.is_pinned else '已取消置顶'
+    if request.headers.get('Accept') == 'application/json':
+        return jsonify({'message': status, 'is_pinned': msg.is_pinned}), 200
+    else:
+        flash(status, 'success')
+        return redirect(url_for('message.index'))
