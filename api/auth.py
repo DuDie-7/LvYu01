@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, timedelta
 from .models import User
 from .exts import db
 
@@ -27,10 +28,28 @@ def login():
 
         user = User.query.filter_by(username=username).first()
 
+        # ===== 如果用户存在，先检查锁定状态 =====
         if user:
-            password_ok = False
-            is_upgraded = False
+            if user.locked_until and user.locked_until > datetime.utcnow():
+                remaining = (user.locked_until - datetime.utcnow()).seconds // 60
+                if remaining <= 0:
+                    # 锁定已过期，自动解除
+                    user.locked_until = None
+                    user.login_fail_count = 0
+                    db.session.commit()
+                else:
+                    msg = f'账号已被锁定，请等待 {remaining + 1} 分钟后重试'
+                    if data:
+                        return jsonify({'error': msg}), 401
+                    else:
+                        flash(msg, 'danger')
+                        return render_template('login.html')
 
+        # ===== 验证密码 =====
+        password_ok = False
+        is_upgraded = False
+
+        if user:
             try:
                 if check_password_hash(user.password, password):
                     password_ok = True
@@ -41,36 +60,50 @@ def login():
                 password_ok = True
                 is_upgraded = True
 
-            if not password_ok:
-                if data:
-                    return jsonify({'error': '密码错误'}), 401
-                else:
-                    flash('密码错误', 'danger')
-                    return render_template('login.html')
-
-            if is_upgraded:
-                try:
-                    user.password = generate_password_hash(password)
+        # ===== 处理验证结果 =====
+        if not user or not password_ok:
+            if user:
+                # 用户名存在，密码错误 → 增加失败计数
+                user.login_fail_count += 1
+                if user.login_fail_count >= 5:
+                    user.locked_until = datetime.utcnow() + timedelta(minutes=5)
                     db.session.commit()
-                except Exception:
-                    db.session.rollback()
+                    msg = '密码错误次数过多，账号已锁定 5 分钟'
+                else:
+                    db.session.commit()
+                    msg = f'密码错误，剩余尝试次数 {5 - user.login_fail_count}'
+            else:
+                # 用户名不存在，不记录失败次数（防止用户名枚举）
+                msg = '用户名或密码错误'
 
-            login_user(user)
             if data:
-                return jsonify({'message': '登录成功', 'username': username}), 200
+                return jsonify({'error': msg}), 401
             else:
-                return redirect(url_for('message.index'))
+                flash(msg, 'danger')
+                return render_template('login.html')
+
+        # ===== 密码正确 =====
+        # 升级哈希（如果是明文）
+        if is_upgraded:
+            try:
+                user.password = generate_password_hash(password)
+            except Exception:
+                db.session.rollback()
+
+        # 重置失败计数和锁定状态
+        user.login_fail_count = 0
+        user.locked_until = None
+        db.session.commit()
+
+        login_user(user)
+        if data:
+            return jsonify({
+                'message': '登录成功',
+                'username': username,
+                'is_admin': user.is_admin
+            }), 200
         else:
-            hashed_pw = generate_password_hash(password)
-            new_user = User(username=username, password=hashed_pw)
-            db.session.add(new_user)
-            db.session.commit()
-            login_user(new_user)
-            if data:
-                return jsonify({'message': f'欢迎 {username}，账号已自动创建并登录', 'username': username}), 201
-            else:
-                flash(f'欢迎 {username}，账号已自动创建并登录', 'success')
-                return redirect(url_for('message.index'))
+            return redirect(url_for('message.index'))
 
     return render_template('login.html')
 
