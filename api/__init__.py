@@ -7,6 +7,13 @@ def create_app():
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
     app.config.from_object(Config)
 
+    # ===== CORS 配置：允许前端跨域请求 =====
+    CORS(app, supports_credentials=True, origins=[
+        'https://lv-yu02.vercel.app',   # Vue 前端（生产）
+        'http://localhost:5173'         # Vue 前端（本地开发）
+    ])
+    # ========================================
+
     db.init_app(app)
     migrate.init_app(app, db)
     login_manager.init_app(app)
