@@ -1,6 +1,7 @@
 from flask import Flask
 from .exts import db, migrate, login_manager
 from config import Config
+from flask_cors import CORS
 
 def create_app():
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
