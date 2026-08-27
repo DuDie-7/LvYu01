@@ -100,6 +100,7 @@ def login():
             return jsonify({
                 'message': '登录成功',
                 'username': username,
+                'user_id': user.id,        # 新增：返回用户ID
                 'is_admin': user.is_admin
             }), 200
         else:
