@@ -1,20 +1,29 @@
-"""
 文件清单
 文件路径	说明
-app.py	应用入口
-config.py	配置文件
-requirements.txt	依赖包列表
-api/__init__.py	应用工厂，注册蓝图，导入模型
-api/exts.py	SQLAlchemy 和 Migrate 实例
-api/models.py	用户和留言模型
-api/auth.py	登录、登出路由
-api/message.py	留言增删改查、分页路由
-templates/base.html	基础模板
-templates/login.html	登录页面
-templates/index.html	留言列表（分页）
-templates/add.html	新增留言
-templates/edit.html	编辑留言
-templates/detail.html	留言详情
+app.py	应用入口，创建 Flask 应用实例，启动时自动创建数据库表（db.create_all()），并插入测试用户（admin）
+config.py	配置文件，包含 SECRET_KEY、SQLALCHEMY_DATABASE_URI、SESSION_COOKIE_SAMESITE、SESSION_COOKIE_SECURE 等配置，支持跨域场景下的 Session Cookie
+requirements.txt	Python 依赖包列表：Flask、Flask-SQLAlchemy、Flask-Migrate、PyMySQL、Flask-Login、gunicorn、flask-cors、Werkzeug
+api/__init__.py	应用工厂函数 create_app()，注册所有蓝图，配置 CORS（支持 Vercel 前端跨域请求），初始化 db、migrate、login_manager，定义 user_loader
+api/exts.py	SQLAlchemy、Migrate、LoginManager 实例（db、migrate、login_manager）
+api/models.py	User 模型（含 username、password、is_admin、login_fail_count、locked_until）和 Message 模型（含 title、content、author_id、created_at、updated_at、is_pinned）
+api/auth.py	登录（支持 JSON 和表单双模，含登录失败锁定机制：5次错误锁定5分钟，密码自动升级哈希）、登出、修改密码（含原密码验证）
+api/message.py	留言增删改查、分页、置顶排序（is_pinned.desc() 排最前），所有接口同时支持 JSON 和表单请求，未登录时返回 401 JSON 错误
+templates/base.html	基础模板，包含导航栏（首页、发表留言、修改密码、登出），显示当前用户名
+templates/login.html	登录页面，显示测试账号提示（123456 / 123456）
+templates/index.html	留言列表（分页），支持置顶标识（📌）显示，管理员可见置顶/取消置顶按钮
+templates/add.html	新增留言表单
+templates/edit.html	编辑留言表单（仅作者本人可编辑）
+templates/detail.html	留言详情页
 
-后续可能有删改，本文件内容可能未同步更新
-"""
+主要功能亮点：
+- 密码加密存储（werkzeug.security，自动升级明文密码）
+- 登录失败锁定（5次失败锁定5分钟，按用户名锁定）
+- 管理员权限（is_admin 字段，admin 可删除所有留言、可置顶/取消置顶）
+- 留言置顶（is_pinned 字段，置顶留言排在列表最前面）
+- 跨域支持（CORS 配置，允许 Vercel 前端域名）
+- Session Cookie 跨域支持（Samesite=None + Secure）
+- N+1 查询优化（joinedload 预加载 author）
+- 双模请求支持（JSON + 表单，silent=True）
+
+部署地址：https://lvyu01-production.up.railway.app
+GitHub：https://github.com/DuDie-7/LvYu01
