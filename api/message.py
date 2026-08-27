@@ -6,10 +6,15 @@ from .exts import db
 
 message_bp = Blueprint('message', __name__)
 
-
 @message_bp.route('/')
-@login_required
 def index():
+    # 手动检查登录状态
+    if not current_user.is_authenticated:
+        if request.headers.get('Accept') == 'application/json':
+            return jsonify({'error': '请先登录'}), 401
+        else:
+            return redirect(url_for('auth.login'))
+
     page = request.args.get('page', 1, type=int)
     per_page = 5
     # 置顶留言排在最前，然后按创建时间倒序
@@ -39,6 +44,7 @@ def index():
             'pages': pagination.pages
         }), 200
     return render_template('index.html', messages=messages, pagination=pagination)
+    
 
 
 @message_bp.route('/add', methods=['GET', 'POST'])
